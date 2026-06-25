@@ -1,0 +1,22 @@
+services:
+  web:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      # Necessario per l'hot reload affidabile su volumi montati (es. WSL2).
+      - WATCHPACK_POLLING=true
+    volumes:
+      # Bind del codice sorgente per l'hot reload...
+      - .:/app
+      # ...ma node_modules e .next restano nei volumi del container.
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+
+volumes:
+  node_modules:
+  next_cache:

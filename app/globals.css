@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   Design tokens — derivati da docs/designPattern.md
+   Tailwind v4: i token in @theme generano automaticamente le utility
+   (bg-felt-700, text-ivory-50, rounded-lg, shadow-card, font-display, ...).
+   =========================================================================== */
+@theme {
+  /* --- Colori brand --- */
+  --color-felt-500: #1a6b47; /* centro del gradiente */
+  --color-felt-700: #15603e; /* sfondo principale */
+  --color-felt-900: #0e4d34; /* bordi/vignettatura */
+  --color-royal-500: #2e3d9e; /* dorso carte */
+  --color-royal-700: #27358a; /* ombre dorso */
+  --color-ivory-50: #f3ecdb; /* facce, cornici, testo su verde */
+  --color-ivory-100: #efe7d4; /* bordi interni */
+  --color-wine-500: #8b2433; /* semi rossi (hover) */
+  --color-wine-600: #7e2030; /* semi rossi / danger */
+  --color-gold-300: #e8be5c; /* highlight scintille */
+  --color-gold-500: #dca12c; /* accento "magico", focus */
+  --color-surface: #0b3b28; /* pannelli sopra il feltro */
+
+  /* --- Tipografia (CSS vars iniettate da next/font) --- */
+  --font-display: var(--font-cinzel), ui-serif, Georgia, serif;
+  --font-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* font-sans di default = body, così il testo base è Hanken Grotesk */
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+
+  /* --- Raggi (squircle del logo) --- */
+  --radius-sm: 8px; /* badge, chip */
+  --radius-md: 14px; /* bottoni, input */
+  --radius-lg: 22px; /* card dei giochi */
+  --radius-xl: 28px; /* pannelli, modali */
+  --radius-card: 10px; /* carta da gioco */
+
+  /* --- Ombre (luce da palco: sempre soffuse) --- */
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 14px 40px rgba(0, 0, 0, 0.35);
+  /* glow oro: SOLO momenti magici (rivelazione, focus) */
+  --shadow-glow-gold: 0 0 24px rgba(220, 161, 44, 0.45);
+
+  /* --- Scala tipografica (size; line-height via utility) --- */
+  --text-display-xl: 2.5rem; /* titolo app */
+  --text-title: 1.5rem; /* titolo gioco */
+}
+
+/* ===========================================================================
+   Variabili semantiche (per uso fuori da Tailwind / componenti)
+   =========================================================================== */
+:root {
+  --bg: var(--color-felt-700);
+  --surface: var(--color-surface);
+  --text: var(--color-ivory-50);
+  --text-muted: rgba(243, 236, 219, 0.62);
+  --accent: var(--color-gold-500);
+  --danger: var(--color-wine-600);
+}
+
+/* ===========================================================================
+   Base
+   =========================================================================== */
+html {
+  /* Il tappetino è il palco: sta sotto a tutto, sempre. */
+  background-color: var(--color-felt-900);
+}
+
+body {
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.55;
+  /* Gradiente radiale del feltro: più chiaro al centro-alto, scuro ai bordi. */
+  background: radial-gradient(
+    120% 90% at 50% 38%,
+    var(--color-felt-500) 0%,
+    var(--color-felt-700) 55%,
+    var(--color-felt-900) 100%
+  );
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: rgba(220, 161, 44, 0.3); /* accento oro discreto */
+}
+
+/* Focus ring oro coerente in tutta l'app */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ===========================================================================
+   Componenti / primitive
+   =========================================================================== */
+@layer components {
+  /* Trattamento del display Cinzel: solo MAIUSCOLO, tracking ampio. */
+  .text-display {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  /* ELEMENTO FIRMA — la "cornice avorio".
+     Ogni superficie dell'app "è" una carta appoggiata sul feltro. */
+  .keyline {
+    border: 1.5px solid rgba(243, 236, 219, 0.24);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+  }
+  /* Stato attivo/selezionato: il keyline si ispessisce e si accende. */
+  .keyline-active {
+    border-color: rgba(243, 236, 219, 0.55);
+  }
+
+  /* Dorso carta classico (stile Bicycle): blu reale + reticolo incrociato. */
+  .card-back {
+    background-color: var(--color-royal-500);
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        transparent 0 7px,
+        rgba(243, 236, 219, 0.08) 7px 8px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        transparent 0 7px,
+        rgba(243, 236, 219, 0.08) 7px 8px
+      );
+  }
+
+  /* Apertura card (designPattern §10): fade + slide-up 8px. */
+  .animate-card-in {
+    opacity: 0;
+    animation: card-in 240ms ease-out forwards;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===========================================================================
+   Accessibilità — rispetta prefers-reduced-motion (designPattern §10)
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
