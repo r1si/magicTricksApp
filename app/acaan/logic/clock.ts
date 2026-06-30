@@ -1,13 +1,20 @@
 // Orologio del metodo (vedi specs.md §4). Ore/minuti REALI; i secondi sono un
-// contatore che parte da 1 all'apertura del gioco e cicla 1..60.
+// contatore che parte da 0 all'apertura del gioco e cicla 0..59 — identico, come
+// intervallo, ai secondi di un vero orologio (così la modalità "telefono" che
+// legge l'ora di sistema usa la stessa mappatura).
 // Funzioni pure con tempo iniettato (startMs/nowMs) per la testabilità.
 
 export type ClockReadout = { hh: number; mm: number; ss: number };
 
-/** Contatore segreto dei secondi: 1 all'avvio, +1/s, dopo 60 riparte da 1. */
+/** Contatore dei secondi del metodo: 0 all'avvio, +1/s, dopo 59 riparte da 0. */
 export function methodSeconds(startMs: number, nowMs: number): number {
   const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-  return (elapsed % 60) + 1;
+  return elapsed % 60;
+}
+
+/** Secondi reali dell'orologio di sistema (0..59) — modalità "telefono". */
+export function realSeconds(nowMs: number): number {
+  return new Date(nowMs).getSeconds();
 }
 
 /** Ore e minuti reali dal tempo di sistema. */

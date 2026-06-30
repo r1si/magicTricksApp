@@ -1,5 +1,6 @@
 import { GAMES, availableCount } from "@/config/games.config";
 import { GameCard } from "@/components/GameCard";
+import { SecretFab } from "@/components/SecretFab";
 
 export default function Home() {
   const label = `${availableCount} ${
@@ -22,6 +23,8 @@ export default function Home() {
           </li>
         ))}
       </ul>
+
+      <SecretFab />
     </main>
   );
 }

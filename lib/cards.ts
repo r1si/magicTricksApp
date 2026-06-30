@@ -5,8 +5,12 @@ export type Suit = "hearts" | "diamonds" | "clubs" | "spades";
 
 export const SUITS: readonly Suit[] = ["hearts", "diamonds", "clubs", "spades"];
 
-/** Valore di una carta: 1..13 (Asso..Re) oppure un jolly. */
-export type CardValue = number | "joker";
+/**
+ * Valore di una carta: 1..13 (Asso..Re), un jolly, oppure "blank" — una carta
+ * totalmente bianca (faccia non stampata), usata quando il valore cade sullo
+ * zero del ciclo dei secondi.
+ */
+export type CardValue = number | "joker" | "blank";
 
 export type Card = { suit: Suit; value: CardValue };
 
@@ -20,9 +24,10 @@ const RANK_LABELS: Record<number, string> = {
   13: "K",
 };
 
-/** Etichetta breve del valore: "A", "2".."10", "J", "Q", "K" o "Jolly". */
+/** Etichetta breve del valore: "A", "2".."10", "J", "Q", "K", "Jolly" o "". */
 export function valueLabel(value: CardValue): string {
   if (value === "joker") return "Jolly";
+  if (value === "blank") return ""; // carta bianca: nessuna stampa
   return RANK_LABELS[value] ?? String(value);
 }
 
@@ -33,8 +38,9 @@ const SUIT_SYMBOLS: Record<Suit, string> = {
   spades: "♠",
 };
 
-/** Etichetta leggibile della carta, es. "5♥" o "Jolly". */
+/** Etichetta leggibile della carta, es. "5♥", "Jolly" o "Bianca". */
 export function cardLabel(card: Card): string {
   if (card.value === "joker") return "Jolly";
+  if (card.value === "blank") return "Bianca";
   return `${valueLabel(card.value)}${SUIT_SYMBOLS[card.suit]}`;
 }

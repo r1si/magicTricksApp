@@ -80,12 +80,15 @@ ACAAN = *Any Card At Any Number*, uno dei plot più celebri della cartomagia.
 
 ### Orologio discreto in alto a sinistra
 - Mostra **ora e minuti reali**.
-- I **secondi** NON sono reali: partono da **1 all'apertura del gioco** e
-  avanzano. Funziona quindi come un contatore controllabile dal mago.
+- I **secondi** sono un contatore che parte da **0 all'apertura del gioco** e
+  cicla 0..59 — stesso intervallo di un orologio reale. È quindi un contatore
+  controllabile dal mago.
+- L'origine dei secondi è configurabile (vedi *Modalità di integrazione*):
+  contatore interno dell'app **oppure** i secondi reali dell'orologio di sistema.
 
 ### Selezione del SEME — i 4 quadranti
-Lo schermo è diviso (idealmente) in 4 quadranti. A comandare è **il primo
-swipe**: la posizione in cui avviene determina il seme.
+Lo spazio è diviso (idealmente) in 4 quadranti. A comandare è **il primo
+comando**: la posizione in cui avviene determina il seme.
 
 | Quadrante | Posizione      | Seme        |
 |-----------|----------------|-------------|
@@ -96,30 +99,55 @@ swipe**: la posizione in cui avviene determina il seme.
 
 ### Selezione del VALORE — i secondi
 Il valore è dato dai **secondi** dell'orologio nel momento chiave.
-Mappatura ciclica a blocchi di 20:
+Mappatura ciclica a blocchi di 20 (`valore = secondi mod 20`):
 
-| Secondi   | Risultato            |
-|-----------|----------------------|
-| 1–13      | Asso … Re (A,2…10,J,Q,K) |
-| 14–20     | Jolly                |
-| 21–33     | Asso … Re (ciclo ripete) |
-| 34–40     | Jolly                |
-| 41–53     | Asso … Re            |
-| 54–60     | Jolly                |
-| 60        | scatta il minuto, ciclo riparte |
+| Secondi      | Risultato            |
+|--------------|----------------------|
+| 00 · 20 · 40 | Carta bianca (lo zero del ciclo) |
+| 1–13         | Asso … Re (A,2…10,J,Q,K) |
+| 14–19        | Jolly                |
+| 21–33        | Asso … Re (ciclo ripete) |
+| 34–39        | Jolly                |
+| 41–53        | Asso … Re            |
+| 54–59        | Jolly                |
 
-**Esempio**: primo swipe in alto a sinistra + secondi = 5 → qualunque carta
+Il mazzo è composto da **55 carte**: 52 + 2 jolly + 1 bianca. Sfilando le carte
+il pile cala visibilmente e, una volta esaurito (55 sfilate), sparisce. Le carte
+distribuite che escono dallo schermo vengono rimosse (performance).
+
+**Esempio**: primo comando in alto a sinistra + secondi = 5 → la carta
 girata col doppio tap sarà il **5 di Cuori**.
 
 In pratica il mago "carica" il valore aspettando il secondo giusto
 (sottraendo mentalmente i multipli di 20) e sceglie il seme con la posizione
-del primo swipe.
+del primo comando.
+
+### Modalità di integrazione (configurabili nel dossier)
+Il mago sceglie nel segreto (`/segreti/acaan`) **come** dare i comandi; le
+scelte persistono (localStorage) e il gioco le legge.
+
+- **Quadrante di riferimento** (default `carta`): da dove si legge il quadrante
+  del seme.
+  - `carta`: posizione del tocco **sulla prima carta**; il comando vale a swipe
+    completato o al doppio tap.
+  - `schermo`: quadrante **dello schermo al primo tocco** (decisione presa alla
+    pressione).
+- **Tempo** (default `prima carta`): quando si leggono i secondi del valore.
+  - `prima carta`: i secondi si bloccano **all'inizio dello swipe** (o al primo
+    tocco in modalità schermo) e si confermano solo se il gesto si completa; uno
+    swipe annullato (carta rimessa in cima) non fissa nulla.
+  - `carta girata`: nell'istante in cui la carta viene girata.
+- **Orologio** (default `app`): chi fornisce i secondi.
+  - `app`: contatore interno (full screen best-effort all'avvio).
+  - `telefono`: secondi reali del sistema (con promemoria di attivarli).
 
 ### Logica di mapping (riferimento)
 ```ts
 // logic/resolveCard.ts
 type Suit = "hearts" | "diamonds" | "clubs" | "spades";
 
+// x,y,w,h: pixel dello schermo (modalità "schermo") oppure uv 0..1 della carta
+// (modalità "carta") — la mappatura è la stessa.
 function suitFromQuadrant(x: number, y: number, w: number, h: number): Suit {
   const left = x < w / 2;
   const top = y < h / 2;
@@ -129,10 +157,11 @@ function suitFromQuadrant(x: number, y: number, w: number, h: number): Suit {
   return "spades";
 }
 
-// secondi → valore (1..13) oppure "joker"
-function valueFromSeconds(sec: number): number | "joker" {
-  const m = ((sec - 1) % 20) + 1; // normalizza nel blocco di 20
-  return m <= 13 ? m : "joker";
+// secondi (0..59) → valore: "blank" (zero del ciclo), 1..13, oppure "joker"
+function valueFromSeconds(sec: number): number | "joker" | "blank" {
+  const block = ((sec % 20) + 20) % 20; // 0..19
+  if (block === 0) return "blank";
+  return block <= 13 ? block : "joker";
 }
 ```
 
@@ -196,30 +225,37 @@ rettangolo sottile. Approccio consigliato:
 - Tono cromatico caldo coerente con il verde del tappetino.
 
 ### 6.5 Interazione (swipe & double tap)
-- **Swipe**: `@use-gesture/react` (`useDrag`) sul canvas o sulla mesh; la
-  velocità/direzione del drag fa scorrere l'indice della carta in cima.
-- **Quadrante del primo swipe**: si legge la coordinata iniziale del gesto
-  (in pixel schermo) e la si confronta con larghezza/altezza viewport → seme.
-  Questo va **catturato solo al primissimo swipe** della sessione di gioco.
+- **Swipe**: drag sulla mesh della carta in cima; la carta segue il dito e, se
+  rilasciata fuori dall'impronta del mazzo, viene distribuita sul feltro.
+- **Quadrante del seme**: la scena riporta dati grezzi (uv del tocco sulla carta
+  e, a livello di contenitore, le coordinate schermo); è il gioco a decidere
+  **cosa** catturare e **quando**, in base alle impostazioni di integrazione
+  (vedi §4). Il seme è **catturato una sola volta** per sessione.
 - **Double tap / rilevamento carta**: R3F espone eventi puntatore con
-  raycasting integrato (`onClick`, `onPointerDown`). Si gestisce il doppio tap
-  misurando l'intervallo tra due tap ravvicinati sulla stessa mesh.
-- **Flip**: animazione di rotazione sull'asse (es. rotazione di π attorno a Y o
-  X) con react-spring/GSAP; a metà animazione si sostituisce la texture della
-  faccia con quella della carta "risolta" dal metodo segreto.
+  raycasting integrato. Si gestisce il doppio tap misurando l'intervallo tra due
+  tap ravvicinati sulla stessa mesh — sia sulle carte distribuite sia sulla
+  carta in cima al mazzo (girabile in posa).
+- **Flip**: rotazione di π attorno all'asse lungo con react-spring (sollevamento
+  + giro); la faccia mostrata è la carta "risolta" dal metodo segreto. La
+  meccanica è condivisa tra carta in cima e carte distribuite (`scene/flip.ts`).
 
 ### 6.6 Disaccoppiamento logica ↔ 3D
-La scena 3D **non conosce** il metodo segreto. Esiste uno stato condiviso (es.
-Zustand o context) che espone:
+La scena 3D **non conosce** il metodo segreto. Uno stato condiviso (Zustand)
+espone solo l'esito, e il gioco orchestra **quando** fissare seme e secondi
+secondo le impostazioni:
 ```ts
 {
-  firstSwipeSuit: Suit | null;      // settato al primo swipe
-  resolvedCard: Card | null;        // calcolata da quadrante + secondi
-  reveal(): void;                   // chiamata al double tap
+  suit: Suit | null;          // seme, fissato al comando del quadrante
+  valueSeconds: number | null; // secondi del valore (modalità "su prima carta")
+  resolvedCard: Card | null;   // calcolata al reveal da suit + secondi
+  captureSuit(x, y, w, h): void; // px schermo oppure uv 0..1 della carta
+  captureSeconds(sec): void;
+  reveal(currentSeconds): void;  // usa valueSeconds se fissato, altrimenti i secondi correnti
 }
 ```
-La scena chiede "quale carta devo mostrare" solo al momento del flip, così la
-parte visiva resta riusabile e testabile.
+Le **impostazioni di integrazione** vivono in uno store separato e persistente
+(`state/settings.ts`). La scena chiede "quale carta devo mostrare" solo al
+momento del flip, così la parte visiva resta riusabile e testabile.
 
 ### 6.7 Integrazione con Next.js (App Router)
 - Three.js richiede `window`: il componente Canvas va importato **client-side**.

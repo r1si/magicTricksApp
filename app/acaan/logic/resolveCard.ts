@@ -21,12 +21,16 @@ export function suitFromQuadrant(
 }
 
 /**
- * VALORE dai secondi dell'orologio, mappatura ciclica a blocchi di 20:
- *   1–13 → Asso..Re · 14–20 → Jolly · poi il ciclo si ripete (21–33, 34–40, …).
+ * VALORE dai secondi dell'orologio (0..59), mappatura ciclica a blocchi di 20:
+ *   blocco = secondi mod 20 →
+ *     0      → carta BIANCA (lo zero del ciclo: 00 / 20 / 40)
+ *     1–13   → Asso..Re
+ *     14–19  → Jolly
  */
 export function valueFromSeconds(sec: number): CardValue {
-  const m = ((sec - 1) % 20) + 1; // normalizza nel blocco di 20 (1..20)
-  return m <= 13 ? m : "joker";
+  const block = ((sec % 20) + 20) % 20; // 0..19 (robusto su input negativi)
+  if (block === 0) return "blank";
+  return block <= 13 ? block : "joker";
 }
 
 /** Carta risolta = seme (dal quadrante) + valore (dai secondi). */

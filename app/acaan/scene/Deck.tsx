@@ -1,113 +1,214 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import {
+  Suspense,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type RefObject,
+} from "react";
 import * as THREE from "three";
-import type { Card } from "@/lib/cards";
-import { createBackTexture, createFaceTexture } from "./cardTextures";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
+import { createEdgeTexture, roundedAlphaTexture } from "./cardTextures";
 import { ActiveCard } from "./ActiveCard";
+import { DealtCard } from "./DealtCard";
+import {
+  BODY_COUNT,
+  CARD_T_SINGLE,
+  TABLE_Y,
+  fillPileMatrices,
+  makeCardGeometry,
+  topYForBody,
+} from "./decks/cardModel";
+import type { Card } from "@/lib/cards";
+import type {
+  CardControl,
+  CardXform,
+  DealtCard as DealtCardData,
+} from "./decks/types";
 
-// Dimensioni carta (unità scena). Spessore su Y → pila lungo l'asse verticale.
-export const CARD_W = 0.64;
-export const CARD_T = 0.003; // ~ proporzioni reali del mazzo (54 carte)
-export const CARD_H = 0.89;
+// Dorso fornito dall'utente (rider-back blu). Stesso dominio → CSP-safe.
+const BACK_URL = "/cards/backCard.png";
 
-// 53 carte nel pile instanziato + 1 carta attiva separata = 54 (52 + 2 jolly).
-const BODY_COUNT = 53;
+// Ordine gruppi makeCardGeometry: faccia +Y, faccia -Y, bordo arrotondato.
+type Mats = THREE.Material[];
 
-// Ordine gruppi materiali di BoxGeometry: [+X, -X, +Y, -Y, +Z, -Z].
-// +Y (top) e -Y (bottom) sono le facce grandi; ±X, ±Z sono i bordi sottili.
-function useCardMaterials(activeCard: Card | null) {
-  const back = useMemo(() => createBackTexture(), []);
+type DeckProps = {
+  /** Carte distribuite sul tavolo (a dorso finché non le giri). */
+  dealt: DealtCardData[];
+  /** Stato del drag della carta attiva (ref, no re-render). */
+  control: RefObject<CardControl>;
+  /** Posa corrente della carta attiva (scritta dalla scena, letta al deal). */
+  activeXform: RefObject<CardXform>;
+  /** Cambia a ogni nuova carta distribuita → rimonta la carta attiva in cima. */
+  activeKey: number;
+  /** Carte ancora nel mazzo (attiva inclusa). 0 → mazzo esaurito, niente cima. */
+  remaining: number;
+  /** Faccia rivelata della carta in cima al mazzo (null finché a dorso). */
+  topFace: Card | null;
+  /** True quando la carta in cima è stata girata. */
+  topRevealed: boolean;
+  onDeal: (pose: CardXform) => void;
+  onRevealCard: (id: number) => void;
+  /** Doppio tap sulla carta in cima: chiede di girarla in posa. */
+  onRevealTop: () => void;
+  /** Pressione sulla carta in cima: uv 0..1 del punto toccato. */
+  onPointerDownInfo: (info: { u: number; v: number }) => void;
+  /** Carte uscite dallo schermo: la scena le rimuove (performance). */
+  onCull: (ids: number[]) => void;
+};
+
+function FotoDeck({
+  dealt,
+  control,
+  activeXform,
+  activeKey,
+  remaining,
+  topFace,
+  topRevealed,
+  onDeal,
+  onRevealCard,
+  onRevealTop,
+  onPointerDownInfo,
+  onCull,
+}: DeckProps) {
+  // Pila: carte sottili (mazzo realistico). Carte singole: più spesse, così il
+  // fianco del cartoncino si vede mentre le sfili/giri.
+  const pileGeometry = useMemo(() => makeCardGeometry(), []);
+  const cardGeometry = useMemo(() => makeCardGeometry(CARD_T_SINGLE), []);
+  const alpha = useMemo(() => roundedAlphaTexture(), []);
+  const backImg = useTexture(BACK_URL, (t) => {
+    const tex = Array.isArray(t) ? t[0] : t;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+  });
 
   const edge = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#efe7d4", // ivory-100 — bordo carta
-        roughness: 0.6,
-        metalness: 0.04,
+        map: createEdgeTexture(),
+        roughness: 0.68,
+        metalness: 0.02,
       }),
     [],
   );
-
   const backMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        map: back,
-        roughness: 0.4,
-        metalness: 0.1,
+        map: backImg,
+        alphaMap: alpha,
+        alphaTest: 0.35,
+        roughness: 0.48,
+        metalness: 0.03,
+        envMapIntensity: 0.45,
       }),
-    [back],
+    [backImg, alpha],
+  );
+  // Materiale del dorso della PILA: opaco ed economico (Lambert, niente PBR né
+  // riflessi environment) e SENZA alphaTest. La pila è quasi tutta nascosta sotto
+  // la carta attiva e, dalla vista dall'alto, le 54 carte si sovrappongono: con
+  // alphaTest la GPU non può scartare i frammenti nascosti (niente early-z) e
+  // ombreggia tutti gli strati → crollo di fps. Il contorno arrotondato lo dà già
+  // la geometria, quindi l'alphaMap qui è superflua.
+  const pileBack = useMemo(
+    () => new THREE.MeshLambertMaterial({ map: backImg }),
+    [backImg],
+  );
+  // Pila: dorso opaco economico sulle due facce + bordo.
+  const pileMaterials = useMemo<Mats>(
+    () => [pileBack, pileBack, edge],
+    [edge, pileBack],
   );
 
-  // Faccia rivelata sul lato -Y della carta attiva (visibile dopo il flip).
-  const faceMat = useMemo(() => {
-    if (!activeCard) return backMat;
-    return new THREE.MeshStandardMaterial({
-      map: createFaceTexture(activeCard),
-      roughness: 0.45,
-      metalness: 0.06,
-    });
-  }, [activeCard, backMat]);
-
-  const pile = useMemo(
-    () => [edge, edge, backMat, backMat, edge, edge],
-    [edge, backMat],
-  );
-  const active = useMemo(
-    () => [edge, edge, backMat, faceMat, edge, edge],
-    [edge, backMat, faceMat],
-  );
-
-  return { pile, active };
-}
-
-type DeckProps = {
-  /** Faccia da rivelare sul lato inferiore della carta attiva. */
-  activeCard?: Card | null;
-  /** Offset orizzontale normalizzato (-1..1) per il riffle in risposta al swipe. */
-  dragRef?: RefObject<number>;
-  /** Chiamata al double tap sulla carta attiva. */
-  onReveal?: () => void;
-};
-
-/**
- * Mazzo 3D: pila instanziata (dorso blu, bordi avorio) + carta attiva separata
- * in cima, pronta per il flip (Step 10). Il swipe la fa "scorrere" (riffle);
- * il double tap innesca la rivelazione.
- */
-export function Deck({ activeCard = null, dragRef, onReveal }: DeckProps) {
-  const geom = useMemo(() => new THREE.BoxGeometry(CARD_W, CARD_T, CARD_H), []);
-  const { pile, active } = useCardMaterials(activeCard);
   const instRef = useRef<THREE.InstancedMesh>(null);
-
   useLayoutEffect(() => {
-    const mesh = instRef.current;
-    if (!mesh) return;
-    const m = new THREE.Matrix4();
-    for (let i = 0; i < BODY_COUNT; i++) {
-      m.makeTranslation(0, i * CARD_T + CARD_T / 2, 0);
-      mesh.setMatrixAt(i, m);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-  }, []);
+    if (instRef.current) fillPileMatrices(instRef.current);
+  }, [pileGeometry]);
 
-  const topY = BODY_COUNT * CARD_T + CARD_T / 2;
+  // Carte ancora nel pile (tutte tranne l'attiva in cima) e quota della cima:
+  // scendono man mano che sfili le carte; a 0 il mazzo è sparito.
+  const bodyCount = Math.max(remaining - 1, 0);
+  const baseY = topYForBody(bodyCount);
+
+  // Culling: ogni ~0.5s proietta le carte distribuite e segnala quelle uscite
+  // dallo schermo, così la scena le rimuove (con 55 carte aiuta le performance).
+  const { camera } = useThree();
+  const cullTimer = useRef(0);
+  const cullVec = useRef(new THREE.Vector3());
+  useFrame((_, delta) => {
+    cullTimer.current += delta;
+    if (cullTimer.current < 0.5 || dealt.length === 0) return;
+    cullTimer.current = 0;
+    const gone: number[] = [];
+    for (const d of dealt) {
+      cullVec.current.set(d.x, TABLE_Y, d.z).project(camera);
+      if (
+        Math.abs(cullVec.current.x) > 1.15 ||
+        Math.abs(cullVec.current.y) > 1.15
+      ) {
+        gone.push(d.id);
+      }
+    }
+    if (gone.length) onCull(gone);
+  });
 
   return (
     <group>
       <instancedMesh
         ref={instRef}
-        args={[geom, pile, BODY_COUNT]}
+        args={[pileGeometry, pileMaterials, BODY_COUNT]}
+        count={bodyCount}
         frustumCulled={false}
       />
-      <ActiveCard
-        geometry={geom}
-        materials={active}
-        topY={topY}
-        revealed={activeCard !== null}
-        dragRef={dragRef}
-        onReveal={onReveal}
-      />
+
+      {dealt.map((d, i) => (
+        <DealtCard
+          key={d.id}
+          geometry={cardGeometry}
+          backMat={backMat}
+          edge={edge}
+          alpha={alpha}
+          face={d.face}
+          x={d.x}
+          z={d.z}
+          rotZ={d.rotZ}
+          lift={i * 0.0016}
+          revealed={d.revealed}
+          onReveal={() => onRevealCard(d.id)}
+        />
+      ))}
+
+      {remaining > 0 && (
+        <ActiveCard
+          key={activeKey}
+          geometry={cardGeometry}
+          baseY={baseY}
+          backMat={backMat}
+          edge={edge}
+          alpha={alpha}
+          face={topFace}
+          revealed={topRevealed}
+          control={control}
+          xformRef={activeXform}
+          onDeal={onDeal}
+          onRevealTop={onRevealTop}
+          onPointerDownInfo={onPointerDownInfo}
+        />
+      )}
     </group>
+  );
+}
+
+/**
+ * Mazzo 3D (stile "Foto": dorso a immagine reale, facce procedurali). L'immagine
+ * del dorso è caricata in Suspense; le luci base montate da DeckScene tengono la
+ * scena visibile nel frattempo.
+ */
+export function Deck(props: DeckProps) {
+  return (
+    <Suspense fallback={null}>
+      <FotoDeck {...props} />
+    </Suspense>
   );
 }

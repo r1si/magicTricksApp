@@ -42,5 +42,7 @@
 | 09 ✅ | `09-acaan-interazioni.done.md` | Swipe + quadrante primo swipe + double tap |
 | 10 ✅ | `10-acaan-rivelazione.done.md` | Flip carta, glow, scintille dorate |
 | 11 ✅ | `11-accessibilita-performance.done.md` | A11y, performance mobile, audit PWA, rifinitura |
+| 12 ✅ | `12-acaan-mazzo-camera-drag.done.md` | Mazzo dettagliato (3 varianti), camera dall'alto, drag realistico |
+| 13 ✅ | `13-acaan-modalita-scatolina.done.md` | Modalità di partenza mazzo/scatolina, swipe d'estrazione, valore semplificato |
 
 Eseguire **in ordine**: ogni step assume completati i precedenti.

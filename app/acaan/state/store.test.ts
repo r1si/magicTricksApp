@@ -8,20 +8,24 @@ describe("useAcaanStore", () => {
 
   it("parte vuoto", () => {
     const s = useAcaanStore.getState();
-    expect(s.firstSwipeSuit).toBeNull();
+    expect(s.suit).toBeNull();
+    expect(s.valueSeconds).toBeNull();
     expect(s.resolvedCard).toBeNull();
   });
 
-  it("captureFirstSwipe fissa il seme dal quadrante", () => {
-    useAcaanStore.getState().captureFirstSwipe(10, 10, 100, 100); // alto-sx
-    expect(useAcaanStore.getState().firstSwipeSuit).toBe("hearts");
+  it("captureSuit fissa il seme dal quadrante", () => {
+    useAcaanStore.getState().captureSuit(10, 10, 100, 100); // alto-sx
+    expect(useAcaanStore.getState().suit).toBe("hearts");
   });
 
-  it("ignora i swipe successivi al primo", () => {
+  it("ignora le catture successive alla prima", () => {
     const s = useAcaanStore.getState();
-    s.captureFirstSwipe(10, 10, 100, 100); // ♥
-    s.captureFirstSwipe(90, 90, 100, 100); // ♠ → deve essere ignorato
-    expect(useAcaanStore.getState().firstSwipeSuit).toBe("hearts");
+    s.captureSuit(10, 10, 100, 100); // ♥
+    s.captureSuit(90, 90, 100, 100); // ♠ → ignorato
+    expect(useAcaanStore.getState().suit).toBe("hearts");
+    s.captureSeconds(5);
+    s.captureSeconds(40); // ignorato
+    expect(useAcaanStore.getState().valueSeconds).toBe(5);
   });
 
   it("reveal senza seme non produce nulla", () => {
@@ -29,23 +33,36 @@ describe("useAcaanStore", () => {
     expect(useAcaanStore.getState().resolvedCard).toBeNull();
   });
 
-  it("esempio specs: alto-sx + secondi 5 → 5 di Cuori", () => {
+  it("ripiego: senza secondi fissati usa quelli passati al reveal", () => {
     const s = useAcaanStore.getState();
-    s.captureFirstSwipe(10, 10, 100, 100);
-    s.reveal(5);
+    s.captureSuit(10, 10, 100, 100); // ♥
+    s.reveal(5); // nessun valueSeconds fissato → usa 5
     expect(useAcaanStore.getState().resolvedCard).toEqual({
       suit: "hearts",
       value: 5,
     });
   });
 
-  it("reset ripulisce seme e carta", () => {
+  it("i secondi fissati hanno precedenza su quelli del reveal", () => {
     const s = useAcaanStore.getState();
-    s.captureFirstSwipe(10, 10, 100, 100);
+    s.captureSuit(90, 10, 100, 100); // ♦ alto-dx
+    s.captureSeconds(13); // valore fissato sulla prima carta
+    s.reveal(40); // i secondi correnti vengono ignorati
+    expect(useAcaanStore.getState().resolvedCard).toEqual({
+      suit: "diamonds",
+      value: 13,
+    });
+  });
+
+  it("reset ripulisce seme, secondi e carta", () => {
+    const s = useAcaanStore.getState();
+    s.captureSuit(10, 10, 100, 100);
+    s.captureSeconds(5);
     s.reveal(5);
     s.reset();
     const after = useAcaanStore.getState();
-    expect(after.firstSwipeSuit).toBeNull();
+    expect(after.suit).toBeNull();
+    expect(after.valueSeconds).toBeNull();
     expect(after.resolvedCard).toBeNull();
   });
 });

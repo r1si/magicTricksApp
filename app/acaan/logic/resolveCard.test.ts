@@ -18,25 +18,31 @@ describe("suitFromQuadrant", () => {
 });
 
 describe("valueFromSeconds", () => {
-  it("blocco 1: 1–13 = Asso..Re, 14–20 = jolly", () => {
+  it("lo zero del ciclo (00 / 20 / 40) = carta bianca", () => {
+    expect(valueFromSeconds(0)).toBe("blank");
+    expect(valueFromSeconds(20)).toBe("blank");
+    expect(valueFromSeconds(40)).toBe("blank");
+  });
+
+  it("blocco 1: 1–13 = Asso..Re, 14–19 = jolly", () => {
     expect(valueFromSeconds(1)).toBe(1);
     expect(valueFromSeconds(13)).toBe(13);
     expect(valueFromSeconds(14)).toBe("joker");
-    expect(valueFromSeconds(20)).toBe("joker");
+    expect(valueFromSeconds(19)).toBe("joker");
   });
 
-  it("blocco 2: 21–33 = Asso..Re, 34–40 = jolly", () => {
+  it("blocco 2: 21–33 = Asso..Re, 34–39 = jolly", () => {
     expect(valueFromSeconds(21)).toBe(1);
     expect(valueFromSeconds(33)).toBe(13);
     expect(valueFromSeconds(34)).toBe("joker");
-    expect(valueFromSeconds(40)).toBe("joker");
+    expect(valueFromSeconds(39)).toBe("joker");
   });
 
-  it("blocco 3: 41–53 = Asso..Re, 54–60 = jolly", () => {
+  it("blocco 3: 41–53 = Asso..Re, 54–59 = jolly", () => {
     expect(valueFromSeconds(41)).toBe(1);
     expect(valueFromSeconds(53)).toBe(13);
     expect(valueFromSeconds(54)).toBe("joker");
-    expect(valueFromSeconds(60)).toBe("joker");
+    expect(valueFromSeconds(59)).toBe("joker");
   });
 });
 
